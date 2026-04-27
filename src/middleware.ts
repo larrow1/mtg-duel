@@ -1,5 +1,10 @@
+import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import authConfig from './auth.config';
+
+// Use the edge-safe config — no DB, no bcrypt — so the middleware bundle
+// stays under Vercel's 1 MB Edge Function limit.
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PREFIXES = [
   '/login',

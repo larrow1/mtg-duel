@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
+import authConfig from './auth.config';
 import { db } from '@/lib/db';
 import { verifyPassword } from '@/lib/passwords';
 
@@ -9,9 +10,12 @@ const Creds = z.object({
   password: z.string().min(1),
 });
 
+// Full server auth: edge-safe base config + Credentials provider that hits the DB.
+// Used by API routes (`auth()`) and the auth API handlers. NEVER imported from
+// middleware — the Prisma + bcrypt deps would blow the 1 MB Edge function limit.
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: 'jwt' },
-  pages: { signIn: '/login' },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -35,23 +39,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt: async ({ token, user }) => {
-      if (user) {
-        token.id = (user as { id?: string }).id;
-        token.isAdmin = (user as { isAdmin?: boolean }).isAdmin ?? false;
-      }
-      return token;
-    },
-    session: async ({ session, token }) => {
-      if (session.user) {
-        (session.user as { id?: string }).id = token.id as string;
-        (session.user as { isAdmin?: boolean }).isAdmin = (token.isAdmin as boolean) ?? false;
-      }
-      return session;
-    },
-  },
-  trustHost: true,
 });
 
 declare module 'next-auth' {
