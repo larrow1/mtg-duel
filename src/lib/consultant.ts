@@ -8,6 +8,7 @@ import type {
   Recommendation,
 } from './types';
 import { ARCHETYPES, ARCHETYPE_BY_ID } from './archetypes';
+import { callClaudeTracked } from './claude-tracked';
 
 const MODEL = process.env.CONSULTANT_MODEL || 'claude-opus-4-7';
 
@@ -130,6 +131,7 @@ function describeSignals(signals: ArchetypeSignal[]): string {
 }
 
 interface ConsultArgs {
+  userId: string;
   candidates: { recommendation: Recommendation; card: CardWithProfile }[];
   pool: CardWithProfile[];
   signals: ArchetypeSignal[];
@@ -157,7 +159,7 @@ export async function consultPick(args: ConsultArgs): Promise<ConsultantOutput> 
     throw new Error('ANTHROPIC_API_KEY missing');
   }
   const client = new Anthropic();
-  const { candidates, pool, signals, packNum, pickNum, divergences } = args;
+  const { userId, candidates, pool, signals, packNum, pickNum, divergences } = args;
 
   const userText = [
     `Pack ${packNum}, pick ${pickNum}.`,
@@ -177,23 +179,29 @@ export async function consultPick(args: ConsultArgs): Promise<ConsultantOutput> 
     'Choose the best pick. Call submit_pick. If recent divergences make the engine ranking stale, say so in your rationale.',
   ].join('\n');
 
-  const resp = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-    tools: [{ ...PICK_TOOL, cache_control: { type: 'ephemeral' } } as Anthropic.Tool],
-    tool_choice: { type: 'tool', name: 'submit_pick' },
-    messages: [{ role: 'user', content: userText }],
+  return callClaudeTracked({
+    userId,
+    endpoint: 'consultant',
+    call: async () => {
+      const resp = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        tools: [{ ...PICK_TOOL, cache_control: { type: 'ephemeral' } } as Anthropic.Tool],
+        tool_choice: { type: 'tool', name: 'submit_pick' },
+        messages: [{ role: 'user', content: userText }],
+      });
+      const toolUse = resp.content.find((b) => b.type === 'tool_use');
+      if (!toolUse || toolUse.type !== 'tool_use') {
+        throw new Error('Consultant did not return a tool_use block');
+      }
+      const input = toolUse.input as ConsultantOutput;
+      const result: ConsultantOutput = {
+        pickName: input.pickName,
+        rationale: input.rationale,
+        archetypeDirection: input.archetypeDirection || null,
+      };
+      return { message: resp, result };
+    },
   });
-
-  const toolUse = resp.content.find((b) => b.type === 'tool_use');
-  if (!toolUse || toolUse.type !== 'tool_use') {
-    throw new Error('Consultant did not return a tool_use block');
-  }
-  const input = toolUse.input as ConsultantOutput;
-  return {
-    pickName: input.pickName,
-    rationale: input.rationale,
-    archetypeDirection: input.archetypeDirection || null,
-  };
 }

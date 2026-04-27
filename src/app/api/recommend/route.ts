@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { auth } from '@/auth';
 import { getCubeByName } from '@/lib/cube-data';
 import { rankPack } from '@/lib/scoring';
 import { consultPick } from '@/lib/consultant';
+import { DailyCapExceeded } from '@/lib/cap';
 import type { CardWithProfile, RecommendResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -41,6 +43,12 @@ function resolve(names: string[], byName: Map<string, CardWithProfile>): {
 }
 
 export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   let parsed;
   try {
     parsed = RecommendBody.parse(await req.json());
@@ -67,6 +75,7 @@ export async function POST(req: Request) {
   );
 
   let consultant: RecommendResponse['consultant'] = null;
+  let capError: { message: string; spent: number; cap: number } | null = null;
   if (parsed.useConsultant && process.env.ANTHROPIC_API_KEY) {
     try {
       const top = ranked.slice(0, 5);
@@ -75,6 +84,7 @@ export async function POST(req: Request) {
         card: byName.get(rec.cardName)!,
       }));
       consultant = await consultPick({
+        userId,
         candidates,
         pool: pool.cards,
         signals,
@@ -83,14 +93,19 @@ export async function POST(req: Request) {
         divergences: parsed.divergences,
       });
     } catch (err) {
-      console.error('Consultant failed:', err);
-      // Non-fatal — fall back to engine ranking
+      if (err instanceof DailyCapExceeded) {
+        capError = { message: err.message, spent: err.spent, cap: err.cap };
+      } else {
+        console.error('Consultant failed:', err);
+      }
+      // Non-fatal — fall back to engine ranking; UI shows the cap error if present
     }
   }
 
   const response: RecommendResponse = { ranked, consultant, signals };
   return NextResponse.json({
     ...response,
+    capError,
     missing: {
       pool: pool.missing,
       seenAndPassed: seen.missing,

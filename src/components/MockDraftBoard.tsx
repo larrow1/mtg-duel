@@ -7,6 +7,7 @@ import { RecommendationPanel } from './RecommendationPanel';
 import { DeckBuilderView, type BuiltDeckClient } from './DeckBuilderView';
 import { StrategyView, type StrategyOverviewClient } from './StrategyView';
 import { TrajectoryPanel } from './TrajectoryPanel';
+import { UserMenu } from './UserMenu';
 import type {
   ArchetypeSignposts,
   ClientCard,
@@ -425,6 +426,7 @@ function Header({
         >
           Reset
         </button>
+        <UserMenu />
       </div>
     </div>
   );

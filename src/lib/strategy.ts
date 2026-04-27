@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { CardWithProfile } from './types';
 import type { BuiltDeck } from './deckbuilder';
 import { ARCHETYPES, ARCHETYPE_BY_ID } from './archetypes';
+import { callClaudeTracked } from './claude-tracked';
 
 const MODEL = process.env.STRATEGY_MODEL || 'claude-opus-4-7';
 
@@ -66,6 +67,7 @@ function describeCard(c: CardWithProfile): string {
 }
 
 interface StrategyArgs {
+  userId: string;
   deck: BuiltDeck;
   byName: Map<string, CardWithProfile>;
 }
@@ -73,7 +75,7 @@ interface StrategyArgs {
 export async function generateStrategy(args: StrategyArgs): Promise<StrategyOverview> {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY missing');
 
-  const { deck, byName } = args;
+  const { userId, deck, byName } = args;
   const spellCards = deck.spells
     .map((n) => byName.get(n))
     .filter((c): c is CardWithProfile => !!c);
@@ -115,16 +117,21 @@ export async function generateStrategy(args: StrategyArgs): Promise<StrategyOver
   ].join('\n');
 
   const client = new Anthropic();
-  const resp = await client.messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-    tools: [{ ...STRATEGY_TOOL, cache_control: { type: 'ephemeral' } } as Anthropic.Tool],
-    tool_choice: { type: 'tool', name: 'submit_strategy' },
-    messages: [{ role: 'user', content: userText }],
+  return callClaudeTracked({
+    userId,
+    endpoint: 'strategy',
+    call: async () => {
+      const resp = await client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        tools: [{ ...STRATEGY_TOOL, cache_control: { type: 'ephemeral' } } as Anthropic.Tool],
+        tool_choice: { type: 'tool', name: 'submit_strategy' },
+        messages: [{ role: 'user', content: userText }],
+      });
+      const toolUse = resp.content.find((b) => b.type === 'tool_use');
+      if (!toolUse || toolUse.type !== 'tool_use') throw new Error('Strategy: no tool_use');
+      return { message: resp, result: toolUse.input as StrategyOverview };
+    },
   });
-
-  const toolUse = resp.content.find((b) => b.type === 'tool_use');
-  if (!toolUse || toolUse.type !== 'tool_use') throw new Error('Strategy: no tool_use');
-  return toolUse.input as StrategyOverview;
 }

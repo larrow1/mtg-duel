@@ -1,13 +1,19 @@
 import Link from 'next/link';
+import { UserMenu } from '@/components/UserMenu';
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-4xl font-bold tracking-tight">mtg-duel</h1>
-      <p className="mt-3 text-neutral-400">
-        Cube draft assistant for the MTGO Vintage Cube. Type each pack as it comes; we rank picks
-        using pool synergy, archetype signals, and a Claude consultant.
-      </p>
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">mtg-duel</h1>
+          <p className="mt-3 text-neutral-400">
+            Cube draft assistant for the MTGO Vintage Cube. Pick from each pack; we rank using pool
+            synergy, archetype signals, and a Claude consultant.
+          </p>
+        </div>
+        <UserMenu />
+      </div>
 
       <div className="mt-10 flex flex-wrap gap-3">
         <Link
@@ -23,29 +29,6 @@ export default function Home() {
           Live draft (manual pack entry)
         </Link>
       </div>
-
-      <section className="mt-16 space-y-3 text-sm text-neutral-400">
-        <h2 className="text-base font-semibold text-neutral-200">Setup</h2>
-        <ol className="list-decimal space-y-1 pl-5">
-          <li>
-            Copy <code className="rounded bg-neutral-800 px-1">.env.local.example</code> to{' '}
-            <code className="rounded bg-neutral-800 px-1">.env.local</code> and add your{' '}
-            <code className="rounded bg-neutral-800 px-1">ANTHROPIC_API_KEY</code>.
-          </li>
-          <li>
-            Run <code className="rounded bg-neutral-800 px-1">npm run ingest:cube</code> to fetch
-            the cube list.
-          </li>
-          <li>
-            Run <code className="rounded bg-neutral-800 px-1">npm run ingest:profiles</code> to
-            generate archetype tags via Claude (one-time, ~5 min).
-          </li>
-          <li>
-            Run <code className="rounded bg-neutral-800 px-1">npm run dev</code> and start
-            drafting.
-          </li>
-        </ol>
-      </section>
     </main>
   );
 }

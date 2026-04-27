@@ -1,0 +1,60 @@
+// Prisma schema for mtg-duel auth + per-user usage tracking.
+// Tables: User (with waitlist/invite/active states), InviteToken, ClaudeUsage.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum UserStatus {
+  WAITLIST
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String?
+  status       UserStatus    @default(WAITLIST)
+  isAdmin      Boolean       @default(false)
+  dailyUsdCap  Decimal?      @db.Decimal(10, 4)
+  note         String?
+  createdAt    DateTime      @default(now())
+  approvedAt   DateTime?
+  redeemedAt   DateTime?
+  inviteTokens InviteToken[]
+  usage        ClaudeUsage[]
+}
+
+model InviteToken {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model ClaudeUsage {
+  id                  String   @id @default(cuid())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  endpoint            String
+  model               String
+  inputTokens         Int
+  outputTokens        Int
+  cacheReadTokens     Int      @default(0)
+  cacheCreationTokens Int      @default(0)
+  costUsd             Decimal  @db.Decimal(10, 6)
+  createdAt           DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

@@ -4,6 +4,7 @@ import { CardSearch } from './CardSearch';
 import { RecommendationPanel } from './RecommendationPanel';
 import { PoolSidebar } from './PoolSidebar';
 import { TrajectoryPanel } from './TrajectoryPanel';
+import { UserMenu } from './UserMenu';
 import type {
   ArchetypeSignposts,
   ClientCard,
@@ -280,6 +281,7 @@ function Header({
         >
           Reset
         </button>
+        <UserMenu />
       </div>
     </div>
   );
